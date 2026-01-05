@@ -5,8 +5,8 @@
 
 PluginInfo = {
   Name = "Universal Modbus TCP Client Pro (80 Ch)",
-  Version = "1.3.3.0",
-  BuildVersion = "1.3.3.0",
+  Version = "1.3.4.0",
+  BuildVersion = "1.3.4.0",
   Id = "ModbusClientPro80",
   Author = "Tomasz Gąsiorowski",
   Description = "Modbus TCP Client (80 Ch, Tabs, Packed Regs)",
@@ -136,25 +136,25 @@ function GetControlLayout(props)
   
   -- --- SETUP PAGE ---
   if CurrentPage == "Setup" then
-    table.insert(graphics, { Type = "GroupBox", Text = "Connection Settings", Position = { 10, 10 }, Size = { 400, 150 } })
+    table.insert(graphics, { Type = "GroupBox", Text = "Connection Settings", Position = { 10, 10 }, Size = { 420, 160 } })
     
     -- Credits
-    table.insert(graphics, { Type = "Label", Text = "Created by Tomasz Gąsiorowski", Position = { 10, 165 }, Size = { 400, 20 }, HTextAlign = "Left", FontStyle = "Italic", Color = {100, 100, 100} })
+    table.insert(graphics, { Type = "Label", Text = "Created by Tomasz Gąsiorowski", Position = { 10, 175 }, Size = { 400, 20 }, HTextAlign = "Left", FontStyle = "Italic", Color = {100, 100, 100} })
 
-    layout["Connect"] = { PrettyName = "Connection~Connect", Style = "Button", Position = { 20, 30 }, Size = { 80, 24 }, Legend = "Enable" }
-    layout["Reset"] = { PrettyName = "Connection~Reset", Style = "Button", Position = { 110, 30 }, Size = { 80, 24 }, Legend = "Reset" }
+    layout["Connect"] = { PrettyName = "Connection~Connect", Style = "Button", Position = { 30, 40 }, Size = { 80, 24 }, Legend = "Enable" }
+    layout["Reset"] = { PrettyName = "Connection~Reset", Style = "Button", Position = { 120, 40 }, Size = { 80, 24 }, Legend = "Reset" }
     
-    table.insert(graphics, { Type = "Label", Text = "Status:", Position = { 20, 70 }, Size = { 60, 20 }, HTextAlign = "Right" })
-    layout["Status"] = { PrettyName = "Connection~Status", Style = "Text", Position = { 90, 70 }, Size = { 200, 20 } }
+    table.insert(graphics, { Type = "Label", Text = "Status:", Position = { 30, 80 }, Size = { 60, 20 }, HTextAlign = "Right" })
+    layout["Status"] = { PrettyName = "Connection~Status", Style = "Text", Position = { 100, 80 }, Size = { 200, 20 } }
     
-    table.insert(graphics, { Type = "Label", Text = "Connected:", Position = { 20, 100 }, Size = { 80, 20 }, HTextAlign = "Right" })
-    layout["Connected"] = { PrettyName = "Connection~Connected", Style = "Led", Position = { 110, 100 }, Size = { 24, 24 } }
+    table.insert(graphics, { Type = "Label", Text = "Connected:", Position = { 30, 110 }, Size = { 80, 20 }, HTextAlign = "Right" })
+    layout["Connected"] = { PrettyName = "Connection~Connected", Style = "Led", Position = { 120, 110 }, Size = { 24, 24 } }
     
-    table.insert(graphics, { Type = "Label", Text = "Offline:", Position = { 150, 100 }, Size = { 60, 20 }, HTextAlign = "Right" })
-    layout["Offline Indication"] = { PrettyName = "Connection~Offline", Style = "Led", Position = { 220, 100 }, Size = { 24, 24 }, Color = { 255, 0, 0 } }
+    table.insert(graphics, { Type = "Label", Text = "Offline:", Position = { 160, 110 }, Size = { 60, 20 }, HTextAlign = "Right" })
+    layout["Offline Indication"] = { PrettyName = "Connection~Offline", Style = "Led", Position = { 230, 110 }, Size = { 24, 24 }, Color = { 255, 0, 0 } }
     
-    table.insert(graphics, { Type = "Label", Text = "Poll Time:", Position = { 260, 100 }, Size = { 70, 20 }, HTextAlign = "Right" })
-    layout["Polling Interval"] = { PrettyName = "Connection~Poll Time", Style = "Text", Position = { 340, 100 }, Size = { 60, 20 } }
+    table.insert(graphics, { Type = "Label", Text = "Poll Time:", Position = { 270, 110 }, Size = { 70, 20 }, HTextAlign = "Right" })
+    layout["Polling Interval"] = { PrettyName = "Connection~Poll Time", Style = "Text", Position = { 350, 110 }, Size = { 60, 20 } }
   end
 
   -- --- COILS PAGE ---
@@ -180,6 +180,12 @@ function GetControlLayout(props)
         table.insert(graphics, { Type = "Label", Text = "Desc", Position = { x_offset+90, y_base }, Size = { 120, 20 }, FontStyle = "Bold" })
         table.insert(graphics, { Type = "Label", Text = "Val", Position = { x_offset+220, y_base }, Size = { 40, 20 }, FontStyle = "Bold" })
         table.insert(graphics, { Type = "Label", Text = "Act", Position = { x_offset+265, y_base }, Size = { 40, 20 }, FontStyle = "Bold" })
+      end
+      
+      -- Add GroupBoxes every 10 rows for visual separation
+      for grp = 0, 3 do
+         local grp_y = y_base + 25 + (grp * 10 * 22) - 5
+         table.insert(graphics, { Type = "GroupBox", Text = "", Position = { x_offset-5, grp_y }, Size = { 470, 225 }, StrokeWidth = 1 })
       end
       
       for row = 1, 40 do
@@ -217,6 +223,12 @@ function GetControlLayout(props)
          table.insert(graphics, { Type = "Label", Text = "Desc", Position = { x_offset+90, y_base }, Size = { 150, 20 }, FontStyle = "Bold" })
          table.insert(graphics, { Type = "Label", Text = "Val", Position = { x_offset+250, y_base }, Size = { 40, 20 }, FontStyle = "Bold" })
       end
+      
+      -- GroupBoxes
+      for grp = 0, 3 do
+         local grp_y = y_base + 25 + (grp * 10 * 22) - 5
+         table.insert(graphics, { Type = "GroupBox", Text = "", Position = { x_offset-5, grp_y }, Size = { 340, 225 }, StrokeWidth = 1 })
+      end
 
       for row = 1, 40 do
         local i = (col * 40) + row
@@ -252,6 +264,12 @@ function GetControlLayout(props)
         table.insert(graphics, { Type = "Label", Text = "Addr", Position = { x_offset+30, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
         table.insert(graphics, { Type = "Label", Text = "Desc", Position = { x_offset+85, y_base }, Size = { 100, 20 }, FontStyle = "Bold" })
         table.insert(graphics, { Type = "Label", Text = "Val", Position = { x_offset+190, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+      end
+      
+      -- GroupBoxes
+      for grp = 0, 3 do
+         local grp_y = y_base + 25 + (grp * 10 * 22) - 5
+         table.insert(graphics, { Type = "GroupBox", Text = "", Position = { x_offset-5, grp_y }, Size = { 450, 225 }, StrokeWidth = 1 })
       end
 
       for row = 1, 40 do
@@ -290,6 +308,12 @@ function GetControlLayout(props)
          table.insert(graphics, { Type = "Label", Text = "Desc", Position = { x_offset+90, y_base }, Size = { 150, 20 }, FontStyle = "Bold" })
          table.insert(graphics, { Type = "Label", Text = "Val", Position = { x_offset+250, y_base }, Size = { 60, 20 }, FontStyle = "Bold" })
       end
+      
+      -- GroupBoxes
+      for grp = 0, 3 do
+         local grp_y = y_base + 25 + (grp * 10 * 22) - 5
+         table.insert(graphics, { Type = "GroupBox", Text = "", Position = { x_offset-5, grp_y }, Size = { 390, 225 }, StrokeWidth = 1 })
+      end
 
       for row = 1, 40 do
         local i = (col * 40) + row
@@ -315,25 +339,40 @@ function GetControlLayout(props)
     table.insert(graphics, { Type = "Label", Text = "Val", Position = { 530, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
     table.insert(graphics, { Type = "Label", Text = "Hex", Position = { 590, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
     
-    -- 80 Rows (No columns split, as it is wide)
-    -- We'll put them in one long list. If user needs tabs, we might need pagination, but standard scrolling works.
-    -- Wait, 80 rows is tall. 25 * 80 = 2000px. Q-SYS handles this.
-    
-    for i = 1, 80 do
-      local y = y_base + 25 + (i-1)*24
-      
-      layout["PReg_En_"..i] = { Position = { 0, y }, Size = { 30, 20 }, ShowLegend = false }
-      layout["PReg_Addr_"..i] = { Position = { 35, y }, Size = { 50, 20 }, ShowLegend = false }
-      layout["PReg_Desc_"..i] = { Position = { 90, y }, Size = { 100, 20 } }
-      
-      -- 16 Bits (20px wide each)
-      for b = 15, 0, -1 do
-        local x = 200 + (15-b)*20
-        layout["PReg_Bit_"..i.."_"..b] = { Position = { x, y }, Size = { 18, 20 }, Legend = "" }
+    -- Split into 2 columns of 40
+    for col = 0, 1 do
+      local x_offset = col * 650 -- Wider offset for Packed Coils
+      if col == 1 then
+        table.insert(graphics, { Type = "Label", Text = "En", Position = { x_offset+0, y_base }, Size = { 30, 20 }, FontStyle = "Bold" })
+        table.insert(graphics, { Type = "Label", Text = "Addr", Position = { x_offset+35, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+        table.insert(graphics, { Type = "Label", Text = "Desc", Position = { x_offset+90, y_base }, Size = { 100, 20 }, FontStyle = "Bold" })
+        table.insert(graphics, { Type = "Label", Text = "15 . . . . . . . 0", Position = { x_offset+200, y_base }, Size = { 320, 20 }, FontStyle = "Bold", HTextAlign = "Center" })
+        table.insert(graphics, { Type = "Label", Text = "Val", Position = { x_offset+530, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
       end
       
-      layout["PReg_Val_"..i] = { Position = { 530, y }, Size = { 50, 20 }, ShowLegend = false }
-      layout["PReg_Hex_"..i] = { Position = { 590, y }, Size = { 50, 20 } }
+      -- GroupBoxes
+      for grp = 0, 3 do
+         local grp_y = y_base + 25 + (grp * 10 * 24) - 5
+         table.insert(graphics, { Type = "GroupBox", Text = "", Position = { x_offset-5, grp_y }, Size = { 645, 245 }, StrokeWidth = 1 })
+      end
+
+      for row = 1, 40 do
+        local i = (col * 40) + row
+        local y = y_base + 25 + (row-1)*24
+        
+        layout["PReg_En_"..i] = { Position = { x_offset+0, y }, Size = { 30, 20 }, ShowLegend = false }
+        layout["PReg_Addr_"..i] = { Position = { x_offset+35, y }, Size = { 50, 20 }, ShowLegend = false }
+        layout["PReg_Desc_"..i] = { Position = { x_offset+90, y }, Size = { 100, 20 } }
+        
+        -- 16 Bits (20px wide each)
+        for b = 15, 0, -1 do
+          local x = x_offset + 200 + (15-b)*20
+          layout["PReg_Bit_"..i.."_"..b] = { Position = { x, y }, Size = { 18, 20 }, Legend = "" }
+        end
+        
+        layout["PReg_Val_"..i] = { Position = { x_offset+530, y }, Size = { 50, 20 }, ShowLegend = false }
+        layout["PReg_Hex_"..i] = { Position = { x_offset+590, y }, Size = { 50, 20 } }
+      end
     end
   end
 
