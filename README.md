@@ -1,5 +1,6 @@
 # Universal Modbus TCP Client Pro (80 Ch)
-**Autor:** Tomasz Gąsiorowski  
+**Autor:** Tomasz Gąsiorowski ([@tomikoni](https://github.com/tomikoni))  
+**Email:** tomasz.kowalski00@hotmail.com  
 **Wersja:** 1.3.3.0  
 
 ## Opis
