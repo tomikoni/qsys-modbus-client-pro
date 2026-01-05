@@ -1,0 +1,927 @@
+-- Universal Modbus TCP Client (Pro Features)
+-- Converted to Pure Lua Plugin Format
+-- 80 Channels per type, organized in Tabs (Pages)
+-- Packed Registers (80 Ch x 16 Bits)
+
+PluginInfo = {
+  Name = "Universal Modbus TCP Client Pro (80 Ch)",
+  Version = "1.3.3.0",
+  BuildVersion = "1.3.3.0",
+  Id = "ModbusClientPro80",
+  Author = "Tomasz Gąsiorowski",
+  Description = "Modbus TCP Client (80 Ch, Tabs, Packed Regs)",
+  Manufacturer = "Generic",
+  Model = "Modbus TCP",
+  Type = "Control"
+}
+
+function GetColor(props)
+  return { 0, 128, 0 } -- Greenish
+end
+
+function GetPrettyName(props)
+  return "Modbus TCP\rClient Pro\r(80 Ch + Packed)"
+end
+
+-- Define Pages (Tabs)
+PageNames = { "Setup", "Coils", "Discrete Inputs", "Holding Registers", "Input Registers", "Packed Coils" }
+
+function GetPages(props)
+  local pages = {}
+  for _, name in ipairs(PageNames) do
+    table.insert(pages, {name = name})
+  end
+  return pages
+end
+
+-- Define Properties
+function GetProperties()
+  return {
+    { Name = "Server Address", Type = "string", Value = "192.168.1.10" },
+    { Name = "Server Port", Type = "integer", Value = 502, Min = 1, Max = 65535 },
+    { Name = "Bus Address", Type = "integer", Value = 1, Min = 0, Max = 255 },
+    { Name = "Polling Time", Type = "integer", Value = 1000, Min = 33, Max = 60000 },
+    { Name = "Timeout (s)", Type = "double", Value = 2.0, Min = 0.1, Max = 30.0 },
+    { Name = "Sync Outputs", Type = "boolean", Value = false },
+    { Name = "Restate Outputs", Type = "enum", Choices = {"Never", "On Connect", "Continuously"}, Value = "Never" },
+    { Name = "Debug Print", Type = "boolean", Value = false }
+  }
+end
+
+-- Define Controls
+function GetControls(props)
+  local ctrls = {
+    -- System (Setup Page)
+    { Name = "Connect", ControlType = "Button", ButtonType = "Toggle", Count = 1, UserPin = true, PinStyle = "Both" },
+    { Name = "Reset", ControlType = "Button", ButtonType = "Trigger", Count = 1, UserPin = true, PinStyle = "Input" },
+    { Name = "Connected", ControlType = "Indicator", IndicatorType = "Led", Count = 1, UserPin = true, PinStyle = "Output" },
+    { Name = "Status", ControlType = "Indicator", IndicatorType = "Text", Count = 1, UserPin = true, PinStyle = "Output" },
+    { Name = "Offline Indication", ControlType = "Indicator", IndicatorType = "Led", Count = 1, UserPin = true, PinStyle = "Output" },
+    { Name = "Polling Interval", ControlType = "Indicator", IndicatorType = "Text", Count = 1, UserPin = true, PinStyle = "Output" },
+  }
+
+  -- Helper to add channel controls
+  local function addChannel(prefix, count, type)
+    for i = 1, count do
+      -- En (Enable)
+      table.insert(ctrls, { Name = prefix.."_En_"..i, ControlType = "Button", ButtonType = "Toggle", DefaultValue = 1, Count = 1 })
+      -- Addr (Knob)
+      table.insert(ctrls, { Name = prefix.."_Addr_"..i, ControlType = "Knob", ControlUnit = "Integer", Min = 0, Max = 65535, DefaultValue = i-1, Count = 1 })
+      -- HexAddr (Text)
+      table.insert(ctrls, { Name = prefix.."_HexAddr_"..i, ControlType = "Text", Count = 1 })
+      -- Desc (Text)
+      table.insert(ctrls, { Name = prefix.."_Desc_"..i, ControlType = "Text", Count = 1 })
+      
+      if type == "COIL" then
+        -- Val (Toggle), Over (Toggle), OverVal (Toggle), Out (LED), Sync (Toggle), ReadOnly (Toggle)
+        table.insert(ctrls, { Name = prefix.."_Val_"..i, ControlType = "Button", ButtonType = "Toggle", Count = 1, UserPin = true, PinStyle = "Both" })
+        table.insert(ctrls, { Name = prefix.."_Over_"..i, ControlType = "Button", ButtonType = "Toggle", Count = 1 })
+        table.insert(ctrls, { Name = prefix.."_OverVal_"..i, ControlType = "Button", ButtonType = "Toggle", Count = 1 })
+        table.insert(ctrls, { Name = prefix.."_Out_"..i, ControlType = "Indicator", IndicatorType = "Led", Count = 1 })
+        table.insert(ctrls, { Name = prefix.."_Sync_"..i, ControlType = "Button", ButtonType = "Toggle", Count = 1 })
+        table.insert(ctrls, { Name = prefix.."_ReadOnly_"..i, ControlType = "Button", ButtonType = "Toggle", Count = 1 })
+        
+      elseif type == "DI" then
+        -- Val (LED)
+        table.insert(ctrls, { Name = prefix.."_Val_"..i, ControlType = "Indicator", IndicatorType = "Led", Count = 1, UserPin = true, PinStyle = "Output" })
+        
+      elseif type == "HR" then
+        -- Val (Knob), Hex (Text), Over (Toggle), OverVal (Knob), OverHex (Text), Out (Knob), OutHex (Text), Sync (Toggle), ReadOnly (Toggle)
+        table.insert(ctrls, { Name = prefix.."_Val_"..i, ControlType = "Knob", ControlUnit = "Integer", Min = 0, Max = 65535, Count = 1, UserPin = true, PinStyle = "Both" })
+        table.insert(ctrls, { Name = prefix.."_Hex_"..i, ControlType = "Text", Count = 1 })
+        table.insert(ctrls, { Name = prefix.."_Over_"..i, ControlType = "Button", ButtonType = "Toggle", Count = 1 })
+        table.insert(ctrls, { Name = prefix.."_OverVal_"..i, ControlType = "Knob", ControlUnit = "Integer", Min = 0, Max = 65535, Count = 1 })
+        table.insert(ctrls, { Name = prefix.."_OverHex_"..i, ControlType = "Text", Count = 1 })
+        table.insert(ctrls, { Name = prefix.."_Out_"..i, ControlType = "Knob", ControlUnit = "Integer", Min = 0, Max = 65535, Count = 1, UserPin = true, PinStyle = "Output" })
+        table.insert(ctrls, { Name = prefix.."_OutHex_"..i, ControlType = "Indicator", IndicatorType = "Text", Count = 1 })
+        table.insert(ctrls, { Name = prefix.."_Sync_"..i, ControlType = "Button", ButtonType = "Toggle", Count = 1 })
+        table.insert(ctrls, { Name = prefix.."_ReadOnly_"..i, ControlType = "Button", ButtonType = "Toggle", Count = 1 })
+        
+      elseif type == "IR" then
+        -- Val (Knob), Hex (Indicator)
+        table.insert(ctrls, { Name = prefix.."_Val_"..i, ControlType = "Knob", ControlUnit = "Integer", Min = 0, Max = 65535, Count = 1, IndicatorType = "Text", UserPin = true, PinStyle = "Output" })
+        table.insert(ctrls, { Name = prefix.."_Hex_"..i, ControlType = "Indicator", IndicatorType = "Text", Count = 1 })
+      end
+    end
+  end
+
+  addChannel("Coil", 80, "COIL")
+  addChannel("DI", 80, "DI")
+  addChannel("HR", 80, "HR")
+  addChannel("IR", 80, "IR")
+  
+  -- Packed Registers (80 Channels)
+  for i = 1, 80 do
+    table.insert(ctrls, { Name = "PReg_En_"..i, ControlType = "Button", ButtonType = "Toggle", DefaultValue = 1, Count = 1 })
+    table.insert(ctrls, { Name = "PReg_Addr_"..i, ControlType = "Knob", ControlUnit = "Integer", Min = 0, Max = 65535, DefaultValue = i-1, Count = 1 })
+    table.insert(ctrls, { Name = "PReg_HexAddr_"..i, ControlType = "Text", Count = 1 })
+    table.insert(ctrls, { Name = "PReg_Desc_"..i, ControlType = "Text", Count = 1 })
+    table.insert(ctrls, { Name = "PReg_Val_"..i, ControlType = "Knob", ControlUnit = "Integer", Min = 0, Max = 65535, Count = 1, UserPin = true, PinStyle = "Both" })
+    table.insert(ctrls, { Name = "PReg_Hex_"..i, ControlType = "Text", Count = 1 })
+    
+    -- 16 Bits
+    for b = 0, 15 do
+       table.insert(ctrls, { Name = "PReg_Bit_"..i.."_"..b, ControlType = "Button", ButtonType = "Toggle", Count = 1, UserPin = true, PinStyle = "Both" })
+    end
+  end
+
+  return ctrls
+end
+
+-- Define Layout
+function GetControlLayout(props)
+  local layout = {}
+  local graphics = {}
+  local CurrentPage = PageNames[props["page_index"].Value]
+  
+  -- --- SETUP PAGE ---
+  if CurrentPage == "Setup" then
+    table.insert(graphics, { Type = "GroupBox", Text = "Connection Settings", Position = { 10, 10 }, Size = { 400, 150 } })
+    
+    -- Credits
+    table.insert(graphics, { Type = "Label", Text = "Created by Tomasz Gąsiorowski", Position = { 10, 165 }, Size = { 400, 20 }, HTextAlign = "Left", FontStyle = "Italic", Color = {100, 100, 100} })
+
+    layout["Connect"] = { PrettyName = "Connection~Connect", Style = "Button", Position = { 20, 30 }, Size = { 80, 24 }, Legend = "Enable" }
+    layout["Reset"] = { PrettyName = "Connection~Reset", Style = "Button", Position = { 110, 30 }, Size = { 80, 24 }, Legend = "Reset" }
+    
+    table.insert(graphics, { Type = "Label", Text = "Status:", Position = { 20, 70 }, Size = { 60, 20 }, HTextAlign = "Right" })
+    layout["Status"] = { PrettyName = "Connection~Status", Style = "Text", Position = { 90, 70 }, Size = { 200, 20 } }
+    
+    table.insert(graphics, { Type = "Label", Text = "Connected:", Position = { 20, 100 }, Size = { 80, 20 }, HTextAlign = "Right" })
+    layout["Connected"] = { PrettyName = "Connection~Connected", Style = "Led", Position = { 110, 100 }, Size = { 24, 24 } }
+    
+    table.insert(graphics, { Type = "Label", Text = "Offline:", Position = { 150, 100 }, Size = { 60, 20 }, HTextAlign = "Right" })
+    layout["Offline Indication"] = { PrettyName = "Connection~Offline", Style = "Led", Position = { 220, 100 }, Size = { 24, 24 }, Color = { 255, 0, 0 } }
+    
+    table.insert(graphics, { Type = "Label", Text = "Poll Time:", Position = { 260, 100 }, Size = { 70, 20 }, HTextAlign = "Right" })
+    layout["Polling Interval"] = { PrettyName = "Connection~Poll Time", Style = "Text", Position = { 340, 100 }, Size = { 60, 20 } }
+  end
+
+  -- --- COILS PAGE ---
+  if CurrentPage == "Coils" then
+    local y_base = 0
+    -- Headers
+    table.insert(graphics, { Type = "Label", Text = "En", Position = { 0, y_base }, Size = { 30, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Addr", Position = { 35, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Desc", Position = { 90, y_base }, Size = { 120, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Val", Position = { 220, y_base }, Size = { 40, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Act", Position = { 265, y_base }, Size = { 40, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Ovr", Position = { 310, y_base }, Size = { 30, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "OVal", Position = { 345, y_base }, Size = { 40, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Sync", Position = { 390, y_base }, Size = { 35, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "RO", Position = { 430, y_base }, Size = { 30, 20 }, FontStyle = "Bold" })
+
+    -- 2 Columns of 40 controls
+    for col = 0, 1 do
+      local x_offset = col * 480
+      if col == 1 then -- Headers for second column
+        table.insert(graphics, { Type = "Label", Text = "En", Position = { x_offset+0, y_base }, Size = { 30, 20 }, FontStyle = "Bold" })
+        table.insert(graphics, { Type = "Label", Text = "Addr", Position = { x_offset+35, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+        table.insert(graphics, { Type = "Label", Text = "Desc", Position = { x_offset+90, y_base }, Size = { 120, 20 }, FontStyle = "Bold" })
+        table.insert(graphics, { Type = "Label", Text = "Val", Position = { x_offset+220, y_base }, Size = { 40, 20 }, FontStyle = "Bold" })
+        table.insert(graphics, { Type = "Label", Text = "Act", Position = { x_offset+265, y_base }, Size = { 40, 20 }, FontStyle = "Bold" })
+      end
+      
+      for row = 1, 40 do
+        local i = (col * 40) + row
+        local y = y_base + 25 + (row-1)*22
+        
+        layout["Coil_En_"..i] = { Position = { x_offset+0, y }, Size = { 30, 20 }, ShowLegend = false }
+        layout["Coil_Addr_"..i] = { Position = { x_offset+35, y }, Size = { 50, 20 }, ShowLegend = false }
+        layout["Coil_Desc_"..i] = { Position = { x_offset+90, y }, Size = { 120, 20 } }
+        layout["Coil_Val_"..i] = { Position = { x_offset+220, y }, Size = { 40, 20 }, Legend = "" }
+        layout["Coil_Out_"..i] = { Position = { x_offset+265, y }, Size = { 40, 20 } }
+        layout["Coil_Over_"..i] = { Position = { x_offset+310, y }, Size = { 30, 20 }, Legend = "" }
+        layout["Coil_OverVal_"..i] = { Position = { x_offset+345, y }, Size = { 40, 20 }, Legend = "" }
+        layout["Coil_Sync_"..i] = { Position = { x_offset+390, y }, Size = { 35, 20 }, Legend = "" }
+        layout["Coil_ReadOnly_"..i] = { Position = { x_offset+430, y }, Size = { 30, 20 }, Legend = "" }
+      end
+    end
+  end
+
+  -- --- DISCRETE INPUTS PAGE ---
+  if CurrentPage == "Discrete Inputs" then
+    local y_base = 0
+    -- Headers
+    table.insert(graphics, { Type = "Label", Text = "En", Position = { 0, y_base }, Size = { 30, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Addr", Position = { 35, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Desc", Position = { 90, y_base }, Size = { 150, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Val", Position = { 250, y_base }, Size = { 40, 20 }, FontStyle = "Bold" })
+
+    -- 2 Columns of 40
+    for col = 0, 1 do
+      local x_offset = col * 350
+      if col == 1 then
+         table.insert(graphics, { Type = "Label", Text = "En", Position = { x_offset+0, y_base }, Size = { 30, 20 }, FontStyle = "Bold" })
+         table.insert(graphics, { Type = "Label", Text = "Addr", Position = { x_offset+35, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+         table.insert(graphics, { Type = "Label", Text = "Desc", Position = { x_offset+90, y_base }, Size = { 150, 20 }, FontStyle = "Bold" })
+         table.insert(graphics, { Type = "Label", Text = "Val", Position = { x_offset+250, y_base }, Size = { 40, 20 }, FontStyle = "Bold" })
+      end
+
+      for row = 1, 40 do
+        local i = (col * 40) + row
+        local y = y_base + 25 + (row-1)*22
+        
+        layout["DI_En_"..i] = { Position = { x_offset+0, y }, Size = { 30, 20 }, ShowLegend = false }
+        layout["DI_Addr_"..i] = { Position = { x_offset+35, y }, Size = { 50, 20 }, ShowLegend = false }
+        layout["DI_Desc_"..i] = { Position = { x_offset+90, y }, Size = { 150, 20 } }
+        layout["DI_Val_"..i] = { Position = { x_offset+250, y }, Size = { 40, 20 } }
+      end
+    end
+  end
+
+  -- --- HOLDING REGISTERS PAGE ---
+  if CurrentPage == "Holding Registers" then
+    local y_base = 0
+    -- Headers
+    table.insert(graphics, { Type = "Label", Text = "En", Position = { 0, y_base }, Size = { 25, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Addr", Position = { 30, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Desc", Position = { 85, y_base }, Size = { 100, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Val", Position = { 190, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Hex", Position = { 245, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Ovr", Position = { 300, y_base }, Size = { 25, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "OVal", Position = { 330, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Sync", Position = { 385, y_base }, Size = { 30, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "RO", Position = { 420, y_base }, Size = { 25, 20 }, FontStyle = "Bold" })
+
+    -- 2 Columns of 40
+    for col = 0, 1 do
+      local x_offset = col * 460
+      if col == 1 then
+        table.insert(graphics, { Type = "Label", Text = "En", Position = { x_offset+0, y_base }, Size = { 25, 20 }, FontStyle = "Bold" })
+        table.insert(graphics, { Type = "Label", Text = "Addr", Position = { x_offset+30, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+        table.insert(graphics, { Type = "Label", Text = "Desc", Position = { x_offset+85, y_base }, Size = { 100, 20 }, FontStyle = "Bold" })
+        table.insert(graphics, { Type = "Label", Text = "Val", Position = { x_offset+190, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+      end
+
+      for row = 1, 40 do
+        local i = (col * 40) + row
+        local y = y_base + 25 + (row-1)*22
+        
+        layout["HR_En_"..i] = { Position = { x_offset+0, y }, Size = { 25, 20 }, ShowLegend = false }
+        layout["HR_Addr_"..i] = { Position = { x_offset+30, y }, Size = { 50, 20 }, ShowLegend = false }
+        layout["HR_Desc_"..i] = { Position = { x_offset+85, y }, Size = { 100, 20 } }
+        layout["HR_Val_"..i] = { Position = { x_offset+190, y }, Size = { 50, 20 }, ShowLegend = false }
+        layout["HR_Hex_"..i] = { Position = { x_offset+245, y }, Size = { 50, 20 } }
+        layout["HR_Over_"..i] = { Position = { x_offset+300, y }, Size = { 25, 20 }, Legend = "" }
+        layout["HR_OverVal_"..i] = { Position = { x_offset+330, y }, Size = { 50, 20 }, ShowLegend = false }
+        layout["HR_Sync_"..i] = { Position = { x_offset+385, y }, Size = { 30, 20 }, Legend = "" }
+        layout["HR_ReadOnly_"..i] = { Position = { x_offset+420, y }, Size = { 25, 20 }, Legend = "" }
+      end
+    end
+  end
+
+  -- --- INPUT REGISTERS PAGE ---
+  if CurrentPage == "Input Registers" then
+    local y_base = 0
+    -- Headers
+    table.insert(graphics, { Type = "Label", Text = "En", Position = { 0, y_base }, Size = { 30, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Addr", Position = { 35, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Desc", Position = { 90, y_base }, Size = { 150, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Val", Position = { 250, y_base }, Size = { 60, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Hex", Position = { 320, y_base }, Size = { 60, 20 }, FontStyle = "Bold" })
+
+    -- 2 Columns of 40
+    for col = 0, 1 do
+      local x_offset = col * 400
+      if col == 1 then
+         table.insert(graphics, { Type = "Label", Text = "En", Position = { x_offset+0, y_base }, Size = { 30, 20 }, FontStyle = "Bold" })
+         table.insert(graphics, { Type = "Label", Text = "Addr", Position = { x_offset+35, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+         table.insert(graphics, { Type = "Label", Text = "Desc", Position = { x_offset+90, y_base }, Size = { 150, 20 }, FontStyle = "Bold" })
+         table.insert(graphics, { Type = "Label", Text = "Val", Position = { x_offset+250, y_base }, Size = { 60, 20 }, FontStyle = "Bold" })
+      end
+
+      for row = 1, 40 do
+        local i = (col * 40) + row
+        local y = y_base + 25 + (row-1)*22
+        
+        layout["IR_En_"..i] = { Position = { x_offset+0, y }, Size = { 30, 20 }, ShowLegend = false }
+        layout["IR_Addr_"..i] = { Position = { x_offset+35, y }, Size = { 50, 20 }, ShowLegend = false }
+        layout["IR_Desc_"..i] = { Position = { x_offset+90, y }, Size = { 150, 20 } }
+        layout["IR_Val_"..i] = { Position = { x_offset+250, y }, Size = { 60, 20 }, ShowLegend = false }
+        layout["IR_Hex_"..i] = { Position = { x_offset+320, y }, Size = { 60, 20 } }
+      end
+    end
+  end
+  
+  -- --- PACKED COILS PAGE ---
+  if CurrentPage == "Packed Coils" then
+    local y_base = 0
+    -- Headers
+    table.insert(graphics, { Type = "Label", Text = "En", Position = { 0, y_base }, Size = { 30, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Addr", Position = { 35, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Desc", Position = { 90, y_base }, Size = { 100, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "15 . . . . . . . 0", Position = { 200, y_base }, Size = { 320, 20 }, FontStyle = "Bold", HTextAlign = "Center" })
+    table.insert(graphics, { Type = "Label", Text = "Val", Position = { 530, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Hex", Position = { 590, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+    
+    -- 80 Rows (No columns split, as it is wide)
+    -- We'll put them in one long list. If user needs tabs, we might need pagination, but standard scrolling works.
+    -- Wait, 80 rows is tall. 25 * 80 = 2000px. Q-SYS handles this.
+    
+    for i = 1, 80 do
+      local y = y_base + 25 + (i-1)*24
+      
+      layout["PReg_En_"..i] = { Position = { 0, y }, Size = { 30, 20 }, ShowLegend = false }
+      layout["PReg_Addr_"..i] = { Position = { 35, y }, Size = { 50, 20 }, ShowLegend = false }
+      layout["PReg_Desc_"..i] = { Position = { 90, y }, Size = { 100, 20 } }
+      
+      -- 16 Bits (20px wide each)
+      for b = 15, 0, -1 do
+        local x = 200 + (15-b)*20
+        layout["PReg_Bit_"..i.."_"..b] = { Position = { x, y }, Size = { 18, 20 }, Legend = "" }
+      end
+      
+      layout["PReg_Val_"..i] = { Position = { 530, y }, Size = { 50, 20 }, ShowLegend = false }
+      layout["PReg_Hex_"..i] = { Position = { 590, y }, Size = { 50, 20 } }
+    end
+  end
+
+  return layout, graphics
+end
+
+-- Start Main Script Logic
+if Controls then
+  -- --- CONFIGURATION ---
+  local IP_ADDRESS = Properties["Server Address"].Value
+  local PORT = Properties["Server Port"].Value
+  local BUS_ID = Properties["Bus Address"].Value
+  local POLL_TIME_MS = Properties["Polling Time"].Value
+  local TIMEOUT = Properties["Timeout (s)"].Value
+  local RESTATE = Properties["Restate Outputs"].Value
+  local SYNC_GLOBAL = Properties["Sync Outputs"].Value
+  local DEBUG = Properties["Debug Print"].Value
+
+  -- Helper: Detect Controls count
+  local function countControls(prefix)
+    local i = 1
+    while Controls[prefix .. i] do i = i + 1 end
+    return i - 1
+  end
+
+  local NUM_COILS = countControls("Coil_Addr_")
+  local NUM_DISC = countControls("DI_Addr_")
+  local NUM_HOLD = countControls("HR_Addr_")
+  local NUM_INP = countControls("IR_Addr_")
+  local NUM_PREG = countControls("PReg_Addr_")
+
+  -- Objects
+  local sock = TcpSocket.New()
+  local timer = Timer.New()
+  local queue = {}
+  local tx_id = 0
+  local waiting = false
+  local last_act = 0
+  local connected = false
+
+  -- Utils
+  function debug(msg)
+    if DEBUG then
+      print("Modbus: "..tostring(msg))
+    end
+  end
+  function toHex(val, padding) return string.format("0x%0"..(padding or 4).."X", val) end
+  function parseHex(str) return tonumber(string.gsub(str or "", "0x", ""), 16) end
+
+  -- Debug initial state
+  if DEBUG then
+    print("Modbus Plugin Started")
+    print("Config: IP="..IP_ADDRESS.." Port="..PORT.." Poll="..POLL_TIME_MS)
+  end
+
+  -- Status
+  function setStatus(msg, state)
+    Controls.Status.String = msg
+    if state == "OK" then
+      Controls.Connected.Boolean = true
+      Controls["Offline Indication"].Boolean = false
+    elseif state == "ERROR" then
+      Controls.Connected.Boolean = false
+      Controls["Offline Indication"].Boolean = true
+    else
+      Controls.Connected.Boolean = false
+      Controls["Offline Indication"].Boolean = false
+    end
+  end
+
+  -- --- MODBUS PACKET BUILDERS ---
+
+  function createMBAP(len)
+    tx_id = (tx_id + 1) % 65535
+    local hi_tx, lo_tx = math.floor(tx_id/256), tx_id%256
+    local hi_len, lo_len = math.floor(len/256), len%256
+    return string.char(hi_tx, lo_tx, 0, 0, hi_len, lo_len, BUS_ID), tx_id
+  end
+
+  function splitWord(v) return math.floor(v/256), v%256 end
+
+  -- FC 01/02/03/04 (Read)
+  function buildRead(fc, start, count)
+    local mbap, tid = createMBAP(6)
+    local h_addr, l_addr = splitWord(start)
+    local h_cnt, l_cnt = splitWord(count)
+    return mbap .. string.char(fc, h_addr, l_addr, h_cnt, l_cnt), tid
+  end
+
+  -- FC 15 (Write Multiple Coils)
+  function buildWriteCoils(start, bits_list)
+    local count = #bits_list
+    local byte_count = math.ceil(count / 8)
+    
+    local mbap, tid = createMBAP(7 + byte_count)
+    local h_addr, l_addr = splitWord(start)
+    local h_cnt, l_cnt = splitWord(count)
+    
+    local data_bytes = ""
+    for i=0, byte_count-1 do
+      local byte_val = 0
+      for b=0, 7 do
+        local idx = i*8 + b + 1
+        if idx <= count and bits_list[idx] then
+          byte_val = byte_val + 2^b
+        end
+      end
+      data_bytes = data_bytes .. string.char(byte_val)
+    end
+    
+    return mbap .. string.char(0x0F, h_addr, l_addr, h_cnt, l_cnt, byte_count) .. data_bytes, tid
+  end
+
+  -- FC 16 (Write Multiple Registers)
+  function buildWriteRegs(start, values)
+    local count = #values
+    local byte_count = count * 2
+    local mbap, tid = createMBAP(7 + byte_count)
+    local h_addr, l_addr = splitWord(start)
+    local h_cnt, l_cnt = splitWord(count)
+    
+    local data = ""
+    for _, val in ipairs(values) do
+      local h, l = splitWord(val)
+      data = data .. string.char(h, l)
+    end
+    
+    return mbap .. string.char(0x10, h_addr, l_addr, h_cnt, l_cnt, byte_count) .. data, tid
+  end
+
+  -- --- QUEUE & TRANSPORT ---
+
+  function queueReq(pkt, type, mapping, priority)
+    local req = { pkt=pkt, type=type, map=mapping, ts=Timer.Now() }
+    if priority then table.insert(queue, 1, req) else table.insert(queue, req) end
+    processQueue()
+  end
+
+  function processQueue()
+    if not connected then return end
+    if waiting then
+      if Timer.Now() - last_act > TIMEOUT then
+        debug("Timeout")
+        waiting = false
+      end
+      return
+    end
+    if #queue > 0 then
+      local req = table.remove(queue, 1)
+      sock:Write(req.pkt)
+      sock.CurrReq = req
+      waiting = true
+      last_act = Timer.Now()
+    end
+  end
+
+  sock.EventHandler = function(sock, evt)
+    if evt == TcpSocket.Events.Connected then
+      connected = true
+      setStatus("Connected", "OK")
+      timer:Start(POLL_TIME_MS / 1000)
+      
+      if RESTATE == "On Connect" then
+        triggerRestate()
+      end
+      
+    elseif evt == TcpSocket.Events.Data then
+      waiting = false
+      last_act = Timer.Now()
+      local data = sock:Read(sock.BufferLength)
+      if sock.CurrReq then handleResp(sock.CurrReq, data) end
+      sock.CurrReq = nil
+      processQueue()
+    elseif evt == TcpSocket.Events.Closed or evt == TcpSocket.Events.Error then
+      connected = false
+      setStatus("Fault", "ERROR")
+      waiting = false
+      timer:Stop()
+    end
+  end
+
+  function handleResp(req, data)
+    if #data < 9 then return end
+    local fc = string.byte(data, 8)
+    if fc >= 0x80 then debug("Ex: "..fc) return end
+    
+    -- Parse Read Data
+    if req.type == "READ" and req.map then
+      local byte_cnt = string.byte(data, 9)
+      
+      for _, item in ipairs(req.map) do
+        if item.type == "BIT" then
+          local bit_offset = item.offset
+          local byte_idx = math.floor(bit_offset / 8) + 10 -- 10 is start of data
+          local bit_idx = bit_offset % 8
+          if byte_idx <= #data then
+            local b = string.byte(data, byte_idx)
+            local val = (math.floor(b / 2^bit_idx) % 2) == 1
+            if item.ctrl then item.ctrl.Boolean = val end
+          end
+        elseif item.type == "REG" then
+          local byte_idx = item.offset * 2 + 10
+          if byte_idx+1 <= #data then
+            local h = string.byte(data, byte_idx)
+            local l = string.byte(data, byte_idx+1)
+            local val = h*256 + l
+            if item.ctrl then 
+               item.ctrl.Value = val 
+               if item.hex_ctrl then item.hex_ctrl.String = toHex(val) end
+               if item.out_ctrl then item.out_ctrl.Value = val end
+               if item.out_hex then item.out_hex.String = toHex(val) end
+               -- If it's a PReg, update bits
+               if item.is_preg then updatePRegBits(item.index, val) end
+            end
+          end
+        end
+      end
+    end
+  end
+
+  -- --- BATCHING ENGINE ---
+
+  function batchRead(list, fc, item_type, max_size)
+    if #list == 0 then return end
+    table.sort(list, function(a,b) return a.addr < b.addr end)
+    
+    local start = list[1].addr
+    local curr_end = start
+    local batch = {list[1]}
+    
+    for i=2, #list do
+      local item = list[i]
+      if item.addr > curr_end + 10 or (item.addr - start) >= max_size then
+        -- Flush batch
+        local count = curr_end - start + 1
+        local map = {}
+        for _, b in ipairs(batch) do
+          local ctrl_name = ""
+          if item_type=="BIT" then ctrl_name = "DI_Val_"..b.index end
+          if item_type=="REG" then ctrl_name = "IR_Val_"..b.index end
+          if item_type=="PREG" then ctrl_name = "PReg_Val_"..b.index end
+          
+          if fc==1 then ctrl_name = "Coil_Out_"..b.index end 
+          if fc==3 and item_type=="REG" then ctrl_name = "HR_Val_"..b.index end
+          if fc==3 and item_type=="PREG" then ctrl_name = "PReg_Val_"..b.index end
+          
+          local hex_ctrl = nil
+          local out_ctrl = nil
+          local out_hex = nil
+          local is_preg = false
+          
+          if fc==3 and item_type=="REG" then 
+              hex_ctrl = Controls["HR_Hex_"..b.index] 
+              out_ctrl = Controls["HR_Out_"..b.index]
+              out_hex = Controls["HR_OutHex_"..b.index]
+          end
+          if fc==3 and item_type=="PREG" then
+              hex_ctrl = Controls["PReg_Hex_"..b.index]
+              is_preg = true
+          end
+          if fc==4 then hex_ctrl = Controls["IR_Hex_"..b.index] end
+          
+          table.insert(map, {
+            type = (max_size > 128) and "BIT" or "REG",
+            offset = b.addr - start,
+            ctrl = Controls[ctrl_name],
+            hex_ctrl = hex_ctrl,
+            out_ctrl = out_ctrl,
+            out_hex = out_hex,
+            is_preg = is_preg,
+            index = b.index
+          })
+        end
+        
+        local pkt, _ = buildRead(fc, start, count)
+        queueReq(pkt, "READ", map)
+        
+        -- New batch
+        start = item.addr
+        batch = {item}
+        curr_end = start
+        
+      else
+        table.insert(batch, item)
+        curr_end = item.addr
+      end
+    end
+    
+    -- Flush last
+    local count = curr_end - start + 1
+    local map = {}
+    for _, b in ipairs(batch) do
+       local ctrl_name = ""
+       if item_type=="BIT" then ctrl_name = "DI_Val_"..b.index end
+       if item_type=="REG" then ctrl_name = "IR_Val_"..b.index end
+       if item_type=="PREG" then ctrl_name = "PReg_Val_"..b.index end
+
+       if fc==1 then ctrl_name = "Coil_Out_"..b.index end
+       if fc==3 and item_type=="REG" then ctrl_name = "HR_Val_"..b.index end
+       if fc==3 and item_type=="PREG" then ctrl_name = "PReg_Val_"..b.index end
+       
+       local hex_ctrl = nil
+       local out_ctrl = nil
+       local out_hex = nil
+       local is_preg = false
+       
+       if fc==3 and item_type=="REG" then 
+          hex_ctrl = Controls["HR_Hex_"..b.index] 
+          out_ctrl = Controls["HR_Out_"..b.index]
+          out_hex = Controls["HR_OutHex_"..b.index]
+       end
+       if fc==3 and item_type=="PREG" then
+          hex_ctrl = Controls["PReg_Hex_"..b.index]
+          is_preg = true
+       end
+       if fc==4 then hex_ctrl = Controls["IR_Hex_"..b.index] end
+       
+       table.insert(map, {
+         type = (max_size > 128) and "BIT" or "REG",
+         offset = b.addr - start,
+         ctrl = Controls[ctrl_name],
+         hex_ctrl = hex_ctrl,
+         out_ctrl = out_ctrl,
+         out_hex = out_hex,
+         is_preg = is_preg,
+         index = b.index
+       })
+    end
+    local pkt, _ = buildRead(fc, start, count)
+    queueReq(pkt, "READ", map)
+  end
+
+  function pollCycle()
+    if not connected then return end
+    if #queue > 50 then return end
+    
+    -- Gather Enabled Inputs
+    local di_list = {}
+    for i=1, NUM_DISC do
+      if Controls["DI_En_"..i].Boolean then
+        table.insert(di_list, {addr=Controls["DI_Addr_"..i].Value, index=i})
+      end
+    end
+    batchRead(di_list, 2, "BIT", 2000)
+    
+    local ir_list = {}
+    for i=1, NUM_INP do
+      if Controls["IR_En_"..i].Boolean then
+        table.insert(ir_list, {addr=Controls["IR_Addr_"..i].Value, index=i})
+      end
+    end
+    batchRead(ir_list, 4, "REG", 120)
+    
+    -- Sync Outputs
+    if SYNC_GLOBAL then
+      local coil_sync = {}
+      for i=1, NUM_COILS do
+        if Controls["Coil_En_"..i].Boolean and Controls["Coil_Sync_"..i].Boolean then
+          table.insert(coil_sync, {addr=Controls["Coil_Addr_"..i].Value, index=i})
+        end
+      end
+      batchRead(coil_sync, 1, "BIT", 2000)
+      
+      local hr_sync = {}
+      for i=1, NUM_HOLD do
+        if Controls["HR_En_"..i].Boolean and Controls["HR_Sync_"..i].Boolean then
+          table.insert(hr_sync, {addr=Controls["HR_Addr_"..i].Value, index=i})
+        end
+      end
+      batchRead(hr_sync, 3, "REG", 120)
+    end
+    
+    -- Poll Packed Registers
+    local preg_list = {}
+    for i=1, NUM_PREG do
+      if Controls["PReg_En_"..i].Boolean then
+         table.insert(preg_list, {addr=Controls["PReg_Addr_"..i].Value, index=i})
+      end
+    end
+    batchRead(preg_list, 3, "PREG", 120)
+    
+    -- Restate Continuously
+    if RESTATE == "Continuously" then
+      triggerRestate()
+    end
+    
+    Controls["Polling Interval"].String = string.format("%d ms", POLL_TIME_MS)
+  end
+
+  timer.EventHandler = pollCycle
+
+  -- --- WRITE HANDLING ---
+
+  local is_internal = false
+
+  function triggerRestate()
+    for i=1, NUM_COILS do writeCoil(i, false) end
+    for i=1, NUM_HOLD do writeHolding(i, false) end
+  end
+
+  function writeCoil(i, priority)
+    if not connected or not Controls["Coil_En_"..i].Boolean or is_internal then return end
+    
+    local val = Controls["Coil_Val_"..i].Boolean
+    if Controls["Coil_Over_"..i].Boolean then val = Controls["Coil_OverVal_"..i].Boolean end
+    
+    Controls["Coil_Out_"..i].Boolean = val
+    
+    if Controls["Coil_ReadOnly_"..i].Boolean then return end
+    
+    local addr = Controls["Coil_Addr_"..i].Value
+    local pkt, _ = buildWriteCoils(addr, {val})
+    queueReq(pkt, "WRITE", nil, priority)
+  end
+
+  function writeHolding(i, priority)
+    if not connected or not Controls["HR_En_"..i].Boolean or is_internal then return end
+    
+    local val = Controls["HR_Val_"..i].Value
+    if Controls["HR_Over_"..i].Boolean then val = Controls["HR_OverVal_"..i].Value end
+    
+    Controls["HR_Out_"..i].Value = val
+    Controls["HR_OutHex_"..i].String = toHex(val)
+    Controls["HR_Hex_"..i].String = toHex(Controls["HR_Val_"..i].Value)
+    
+    if Controls["HR_ReadOnly_"..i].Boolean then return end
+    
+    local addr = Controls["HR_Addr_"..i].Value
+    local pkt, _ = buildWriteRegs(addr, {val})
+    queueReq(pkt, "WRITE", nil, priority)
+  end
+  
+  -- Packed Registers Logic
+  
+  function updatePRegInt(i)
+    if is_internal then return end
+    local val = 0
+    for b=0, 15 do
+      if Controls["PReg_Bit_"..i.."_"..b].Boolean then
+        val = val + 2^b
+      end
+    end
+    
+    is_internal = true
+    Controls["PReg_Val_"..i].Value = val
+    Controls["PReg_Hex_"..i].String = toHex(val)
+    is_internal = false
+    
+    writePReg(i)
+  end
+  
+  function updatePRegBits(i, val)
+    is_internal = true
+    for b=0, 15 do
+      local bit_set = (math.floor(val / 2^b) % 2) == 1
+      Controls["PReg_Bit_"..i.."_"..b].Boolean = bit_set
+    end
+    Controls["PReg_Hex_"..i].String = toHex(val)
+    is_internal = false
+  end
+  
+  function writePReg(i)
+    if not connected or not Controls["PReg_En_"..i].Boolean then return end
+    local val = Controls["PReg_Val_"..i].Value
+    local addr = Controls["PReg_Addr_"..i].Value
+    local pkt, _ = buildWriteRegs(addr, {val})
+    queueReq(pkt, "WRITE", nil, true)
+  end
+
+  -- --- HANDLERS ---
+
+  -- Coils
+  for i=1, NUM_COILS do
+    local w = function() 
+      writeCoil(i, true)
+    end
+    Controls["Coil_Val_"..i].EventHandler = w
+    Controls["Coil_Over_"..i].EventHandler = w
+    Controls["Coil_OverVal_"..i].EventHandler = w
+    
+    Controls["Coil_Addr_"..i].EventHandler = function(c) Controls["Coil_HexAddr_"..i].String = toHex(c.Value) end
+    Controls["Coil_HexAddr_"..i].EventHandler = function(c) 
+      local v = parseHex(c.String) 
+      if v then Controls["Coil_Addr_"..i].Value = v end 
+    end
+  end
+  
+  -- Holding
+  for i=1, NUM_HOLD do
+    local w = function() writeHolding(i, true) end
+    Controls["HR_Val_"..i].EventHandler = w
+    Controls["HR_Over_"..i].EventHandler = w
+    Controls["HR_OverVal_"..i].EventHandler = w
+    
+    Controls["HR_Hex_"..i].EventHandler = function(c)
+      local v = parseHex(c.String)
+      if v then Controls["HR_Val_"..i].Value = v end
+    end
+    
+    Controls["HR_OverHex_"..i].EventHandler = function(c)
+      local v = parseHex(c.String)
+      if v then Controls["HR_OverVal_"..i].Value = v end
+    end
+    Controls["HR_OverVal_"..i].EventHandler = function(c)
+      Controls["HR_OverHex_"..i].String = toHex(c.Value)
+      writeHolding(i, true)
+    end
+
+    Controls["HR_Addr_"..i].EventHandler = function(c) Controls["HR_HexAddr_"..i].String = toHex(c.Value) end
+    Controls["HR_HexAddr_"..i].EventHandler = function(c) 
+      local v = parseHex(c.String) 
+      if v then Controls["HR_Addr_"..i].Value = v end 
+    end
+  end
+  
+  -- Packed Registers Handlers
+  for i=1, NUM_PREG do
+    -- Bit Buttons
+    for b=0, 15 do
+       Controls["PReg_Bit_"..i.."_"..b].EventHandler = function() updatePRegInt(i) end
+    end
+    
+    -- Main Val Knob
+    Controls["PReg_Val_"..i].EventHandler = function(c)
+       if not is_internal then
+         updatePRegBits(i, c.Value)
+         Controls["PReg_Hex_"..i].String = toHex(c.Value)
+         writePReg(i)
+       end
+    end
+    
+    -- Address
+    Controls["PReg_Addr_"..i].EventHandler = function(c) Controls["PReg_HexAddr_"..i].String = toHex(c.Value) end
+    Controls["PReg_HexAddr_"..i].EventHandler = function(c) 
+      local v = parseHex(c.String) 
+      if v then Controls["PReg_Addr_"..i].Value = v end 
+    end
+  end
+
+  -- Discretes & Inputs Addr handlers
+  for i=1, NUM_DISC do
+    Controls["DI_Addr_"..i].EventHandler = function(c) Controls["DI_HexAddr_"..i].String = toHex(c.Value) end
+    Controls["DI_HexAddr_"..i].EventHandler = function(c) 
+      local v = parseHex(c.String) 
+      if v then Controls["DI_Addr_"..i].Value = v end 
+    end
+  end
+  for i=1, NUM_INP do
+    Controls["IR_Addr_"..i].EventHandler = function(c) Controls["IR_HexAddr_"..i].String = toHex(c.Value) end
+    Controls["IR_HexAddr_"..i].EventHandler = function(c) 
+      local v = parseHex(c.String) 
+      if v then Controls["IR_Addr_"..i].Value = v end 
+    end
+  end
+
+  -- System
+  Controls.Connect.EventHandler = function(c)
+    if c.Boolean then
+      sock:Connect(IP_ADDRESS, PORT)
+      setStatus("Connecting...", "WARN")
+    else
+      sock:Disconnect()
+      setStatus("Disconnected", "OFF")
+    end
+  end
+
+  Controls.Reset.EventHandler = function()
+    if connected then sock:Disconnect() end
+    Timer.CallAfter(function() 
+      if Controls.Connect.Boolean then sock:Connect(IP_ADDRESS, PORT) end 
+    end, 0.5)
+  end
+
+  -- Init Hex Displays
+  for i=1, NUM_COILS do Controls["Coil_HexAddr_"..i].String = toHex(Controls["Coil_Addr_"..i].Value) end
+  for i=1, NUM_DISC do Controls["DI_HexAddr_"..i].String = toHex(Controls["DI_Addr_"..i].Value) end
+  for i=1, NUM_HOLD do 
+    Controls["HR_HexAddr_"..i].String = toHex(Controls["HR_Addr_"..i].Value)
+    Controls["HR_Hex_"..i].String = toHex(Controls["HR_Val_"..i].Value)
+  end
+  for i=1, NUM_INP do Controls["IR_HexAddr_"..i].String = toHex(Controls["IR_Addr_"..i].Value) end
+  
+  -- Init PReg Hex
+  for i=1, NUM_PREG do
+     Controls["PReg_HexAddr_"..i].String = toHex(Controls["PReg_Addr_"..i].Value)
+     Controls["PReg_Hex_"..i].String = toHex(Controls["PReg_Val_"..i].Value)
+  end
+
+  if Controls.Connect.Boolean then sock:Connect(IP_ADDRESS, PORT) end
+
+end
