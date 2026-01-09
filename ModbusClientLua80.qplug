@@ -5,11 +5,11 @@
 
 PluginInfo = {
   Name = "Universal Modbus TCP Client Pro (80 Ch)",
-  Version = "1.3.4.0",
-  BuildVersion = "1.3.4.0",
+  Version = "1.3.5.0",
+  BuildVersion = "1.3.5.0",
   Id = "ModbusClientPro80",
   Author = "Tomasz Gąsiorowski",
-  Description = "Modbus TCP Client (80 Ch, Tabs, Packed Regs)",
+  Description = "Modbus TCP Client (80 Ch, Tabs, Packed Regs/Inputs)",
   Manufacturer = "Generic",
   Model = "Modbus TCP",
   Type = "Control"
@@ -24,7 +24,7 @@ function GetPrettyName(props)
 end
 
 -- Define Pages (Tabs)
-PageNames = { "Setup", "Coils", "Discrete Inputs", "Holding Registers", "Input Registers", "Packed Coils" }
+PageNames = { "Setup", "Coils", "Discrete Inputs", "Holding Registers", "Input Registers", "Packed Coils", "Packed Inputs" }
 
 function GetPages(props)
   local pages = {}
@@ -122,6 +122,21 @@ function GetControls(props)
     -- 16 Bits
     for b = 0, 15 do
        table.insert(ctrls, { Name = "PReg_Bit_"..i.."_"..b, ControlType = "Button", ButtonType = "Toggle", Count = 1, UserPin = true, PinStyle = "Both" })
+    end
+  end
+
+  -- Packed Inputs (80 Channels)
+  for i = 1, 80 do
+    table.insert(ctrls, { Name = "PInp_En_"..i, ControlType = "Button", ButtonType = "Toggle", DefaultValue = 1, Count = 1 })
+    table.insert(ctrls, { Name = "PInp_Addr_"..i, ControlType = "Knob", ControlUnit = "Integer", Min = 0, Max = 65535, DefaultValue = i-1, Count = 1 })
+    table.insert(ctrls, { Name = "PInp_HexAddr_"..i, ControlType = "Text", Count = 1 })
+    table.insert(ctrls, { Name = "PInp_Desc_"..i, ControlType = "Text", Count = 1 })
+    table.insert(ctrls, { Name = "PInp_Val_"..i, ControlType = "Knob", ControlUnit = "Integer", Min = 0, Max = 65535, Count = 1, IndicatorType = "Text", UserPin = true, PinStyle = "Output" })
+    table.insert(ctrls, { Name = "PInp_Hex_"..i, ControlType = "Text", Count = 1 })
+    
+    -- 16 Bits (Indicators)
+    for b = 0, 15 do
+       table.insert(ctrls, { Name = "PInp_Bit_"..i.."_"..b, ControlType = "Indicator", IndicatorType = "Led", Count = 1, UserPin = true, PinStyle = "Output" })
     end
   end
 
@@ -376,6 +391,54 @@ function GetControlLayout(props)
     end
   end
 
+  -- --- PACKED INPUTS PAGE ---
+  if CurrentPage == "Packed Inputs" then
+    local y_base = 0
+    -- Headers
+    table.insert(graphics, { Type = "Label", Text = "En", Position = { 0, y_base }, Size = { 30, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Addr", Position = { 35, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Desc", Position = { 90, y_base }, Size = { 100, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "15 . . . . . . . 0", Position = { 200, y_base }, Size = { 320, 20 }, FontStyle = "Bold", HTextAlign = "Center" })
+    table.insert(graphics, { Type = "Label", Text = "Val", Position = { 530, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+    table.insert(graphics, { Type = "Label", Text = "Hex", Position = { 590, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+    
+    -- Split into 2 columns of 40
+    for col = 0, 1 do
+      local x_offset = col * 650
+      if col == 1 then
+        table.insert(graphics, { Type = "Label", Text = "En", Position = { x_offset+0, y_base }, Size = { 30, 20 }, FontStyle = "Bold" })
+        table.insert(graphics, { Type = "Label", Text = "Addr", Position = { x_offset+35, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+        table.insert(graphics, { Type = "Label", Text = "Desc", Position = { x_offset+90, y_base }, Size = { 100, 20 }, FontStyle = "Bold" })
+        table.insert(graphics, { Type = "Label", Text = "15 . . . . . . . 0", Position = { x_offset+200, y_base }, Size = { 320, 20 }, FontStyle = "Bold", HTextAlign = "Center" })
+        table.insert(graphics, { Type = "Label", Text = "Val", Position = { x_offset+530, y_base }, Size = { 50, 20 }, FontStyle = "Bold" })
+      end
+      
+      -- GroupBoxes
+      for grp = 0, 3 do
+         local grp_y = y_base + 25 + (grp * 10 * 24) - 5
+         table.insert(graphics, { Type = "GroupBox", Text = "", Position = { x_offset-5, grp_y }, Size = { 645, 245 }, StrokeWidth = 1 })
+      end
+
+      for row = 1, 40 do
+        local i = (col * 40) + row
+        local y = y_base + 25 + (row-1)*24
+        
+        layout["PInp_En_"..i] = { Position = { x_offset+0, y }, Size = { 30, 20 }, ShowLegend = false }
+        layout["PInp_Addr_"..i] = { Position = { x_offset+35, y }, Size = { 50, 20 }, ShowLegend = false }
+        layout["PInp_Desc_"..i] = { Position = { x_offset+90, y }, Size = { 100, 20 } }
+        
+        -- 16 Bits (20px wide each)
+        for b = 15, 0, -1 do
+          local x = x_offset + 200 + (15-b)*20
+          layout["PInp_Bit_"..i.."_"..b] = { Position = { x, y }, Size = { 18, 20 }, Legend = "" }
+        end
+        
+        layout["PInp_Val_"..i] = { Position = { x_offset+530, y }, Size = { 50, 20 }, ShowLegend = false }
+        layout["PInp_Hex_"..i] = { Position = { x_offset+590, y }, Size = { 50, 20 } }
+      end
+    end
+  end
+
   return layout, graphics
 end
 
@@ -403,6 +466,7 @@ if Controls then
   local NUM_HOLD = countControls("HR_Addr_")
   local NUM_INP = countControls("IR_Addr_")
   local NUM_PREG = countControls("PReg_Addr_")
+  local NUM_PINP = countControls("PInp_Addr_")
 
   -- Objects
   local sock = TcpSocket.New()
@@ -586,6 +650,7 @@ if Controls then
                if item.out_hex then item.out_hex.String = toHex(val) end
                -- If it's a PReg, update bits
                if item.is_preg then updatePRegBits(item.index, val) end
+               if item.is_pinp then updatePInpBits(item.index, val) end
             end
           end
         end
@@ -614,15 +679,18 @@ if Controls then
           if item_type=="BIT" then ctrl_name = "DI_Val_"..b.index end
           if item_type=="REG" then ctrl_name = "IR_Val_"..b.index end
           if item_type=="PREG" then ctrl_name = "PReg_Val_"..b.index end
+          if item_type=="PINP" then ctrl_name = "PInp_Val_"..b.index end
           
           if fc==1 then ctrl_name = "Coil_Out_"..b.index end 
           if fc==3 and item_type=="REG" then ctrl_name = "HR_Val_"..b.index end
           if fc==3 and item_type=="PREG" then ctrl_name = "PReg_Val_"..b.index end
+          if fc==4 and item_type=="PINP" then ctrl_name = "PInp_Val_"..b.index end
           
           local hex_ctrl = nil
           local out_ctrl = nil
           local out_hex = nil
           local is_preg = false
+          local is_pinp = false
           
           if fc==3 and item_type=="REG" then 
               hex_ctrl = Controls["HR_Hex_"..b.index] 
@@ -633,7 +701,11 @@ if Controls then
               hex_ctrl = Controls["PReg_Hex_"..b.index]
               is_preg = true
           end
-          if fc==4 then hex_ctrl = Controls["IR_Hex_"..b.index] end
+          if fc==4 and item_type=="REG" then hex_ctrl = Controls["IR_Hex_"..b.index] end
+          if fc==4 and item_type=="PINP" then
+              hex_ctrl = Controls["PInp_Hex_"..b.index]
+              is_pinp = true
+          end
           
           table.insert(map, {
             type = (max_size > 128) and "BIT" or "REG",
@@ -643,6 +715,7 @@ if Controls then
             out_ctrl = out_ctrl,
             out_hex = out_hex,
             is_preg = is_preg,
+            is_pinp = is_pinp,
             index = b.index
           })
         end
@@ -669,15 +742,18 @@ if Controls then
        if item_type=="BIT" then ctrl_name = "DI_Val_"..b.index end
        if item_type=="REG" then ctrl_name = "IR_Val_"..b.index end
        if item_type=="PREG" then ctrl_name = "PReg_Val_"..b.index end
+       if item_type=="PINP" then ctrl_name = "PInp_Val_"..b.index end
 
        if fc==1 then ctrl_name = "Coil_Out_"..b.index end
        if fc==3 and item_type=="REG" then ctrl_name = "HR_Val_"..b.index end
        if fc==3 and item_type=="PREG" then ctrl_name = "PReg_Val_"..b.index end
+       if fc==4 and item_type=="PINP" then ctrl_name = "PInp_Val_"..b.index end
        
        local hex_ctrl = nil
        local out_ctrl = nil
        local out_hex = nil
        local is_preg = false
+       local is_pinp = false
        
        if fc==3 and item_type=="REG" then 
           hex_ctrl = Controls["HR_Hex_"..b.index] 
@@ -688,7 +764,11 @@ if Controls then
           hex_ctrl = Controls["PReg_Hex_"..b.index]
           is_preg = true
        end
-       if fc==4 then hex_ctrl = Controls["IR_Hex_"..b.index] end
+       if fc==4 and item_type=="REG" then hex_ctrl = Controls["IR_Hex_"..b.index] end
+       if fc==4 and item_type=="PINP" then
+          hex_ctrl = Controls["PInp_Hex_"..b.index]
+          is_pinp = true
+       end
        
        table.insert(map, {
          type = (max_size > 128) and "BIT" or "REG",
@@ -698,6 +778,7 @@ if Controls then
          out_ctrl = out_ctrl,
          out_hex = out_hex,
          is_preg = is_preg,
+         is_pinp = is_pinp,
          index = b.index
        })
     end
@@ -753,6 +834,15 @@ if Controls then
       end
     end
     batchRead(preg_list, 3, "PREG", 120)
+    
+    -- Poll Packed Inputs
+    local pinp_list = {}
+    for i=1, NUM_PINP do
+      if Controls["PInp_En_"..i].Boolean then
+         table.insert(pinp_list, {addr=Controls["PInp_Addr_"..i].Value, index=i})
+      end
+    end
+    batchRead(pinp_list, 4, "PINP", 120)
     
     -- Restate Continuously
     if RESTATE == "Continuously" then
@@ -842,6 +932,15 @@ if Controls then
     queueReq(pkt, "WRITE", nil, true)
   end
 
+  -- Packed Inputs Logic
+  function updatePInpBits(i, val)
+    for b=0, 15 do
+      local bit_set = (math.floor(val / 2^b) % 2) == 1
+      Controls["PInp_Bit_"..i.."_"..b].Boolean = bit_set
+    end
+    Controls["PInp_Hex_"..i].String = toHex(val)
+  end
+
   -- --- HANDLERS ---
 
   -- Coils
@@ -912,6 +1011,15 @@ if Controls then
     end
   end
 
+  -- Packed Inputs Handlers
+  for i=1, NUM_PINP do
+    Controls["PInp_Addr_"..i].EventHandler = function(c) Controls["PInp_HexAddr_"..i].String = toHex(c.Value) end
+    Controls["PInp_HexAddr_"..i].EventHandler = function(c) 
+      local v = parseHex(c.String) 
+      if v then Controls["PInp_Addr_"..i].Value = v end 
+    end
+  end
+
   -- Discretes & Inputs Addr handlers
   for i=1, NUM_DISC do
     Controls["DI_Addr_"..i].EventHandler = function(c) Controls["DI_HexAddr_"..i].String = toHex(c.Value) end
@@ -959,6 +1067,12 @@ if Controls then
   for i=1, NUM_PREG do
      Controls["PReg_HexAddr_"..i].String = toHex(Controls["PReg_Addr_"..i].Value)
      Controls["PReg_Hex_"..i].String = toHex(Controls["PReg_Val_"..i].Value)
+  end
+  
+  -- Init PInp Hex
+  for i=1, NUM_PINP do
+     Controls["PInp_HexAddr_"..i].String = toHex(Controls["PInp_Addr_"..i].Value)
+     Controls["PInp_Hex_"..i].String = toHex(Controls["PInp_Val_"..i].Value)
   end
 
   if Controls.Connect.Boolean then sock:Connect(IP_ADDRESS, PORT) end
